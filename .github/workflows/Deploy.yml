@@ -1,0 +1,36 @@
+name: Deploy dnsryzen.com to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Go to the dnsryzen folder
+            cd /opt/dnsryzen.com/
+            
+            # Pull the latest code
+            sudo git pull origin main
+            
+            # Build the Docker image
+            sudo docker build -t dnsryzen-image .
+            
+            # Stop and remove the old container
+            sudo docker rm -f dnsryzen-container || true
+            
+            # Run the new container (Assuming this one runs on port 8000!)
+            sudo docker run -d --name dnsryzen-container --restart unless-stopped -p 8000:80 dnsryzen-image
