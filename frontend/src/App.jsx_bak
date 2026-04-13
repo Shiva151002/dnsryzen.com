@@ -1,0 +1,363 @@
+import React, { useState, useEffect } from 'react';
+import { DNS_RECORD_TYPES } from './constants/recordTypes';
+import Sidebar from './components/Sidebar';
+import DomainReport from './components/DomainReport';
+import EmailHealth from './components/EmailHealth';
+import WhatIsMyIP from './components/WhatIsMyIP';
+import RedirectionFinder from './components/RedirectionFinder';
+import SSLChecker from './components/SSLChecker';
+import HeaderAnalyzer from './components/HeaderAnalyzer'; // Import NEW Component
+import AIConnectModal from './components/AIConnectModal';
+import DisconnectModal from './components/DisconnectModal';
+import { Search, Copy, Clock, Trash2, Zap, Moon, Sun, CheckCircle2, Sparkles } from 'lucide-react';
+
+const formatAIResponse = (text) => {
+  if (!text) return null;
+  return text.split('\n').map((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed) return <div key={index} className="h-3" />;
+    let processedLine = trimmed.replace(/^(\d+\.\s|^\*\s|^-\s)/, '').trim();
+    const parts = processedLine.split(/(\*\*.*?\*\*)/g);
+    const content = parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <span key={i} className="font-bold text-orange-400 dark:text-orange-300">{part.slice(2, -2)}:</span>;
+      }
+      return part;
+    });
+    return <p key={index} className="mb-2 text-sm leading-relaxed text-slate-300">{content}</p>;
+  });
+};
+
+function App() {
+  const [activeTool, setActiveTool] = useState('DNS Lookup');
+  const [domain, setDomain] = useState('');
+  const [recordType, setRecordType] = useState('A');
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [recentLookups, setRecentLookups] = useState([]);
+  const [darkMode, setDarkMode] = useState(false);
+  const [error, setError] = useState(null);
+
+  const [reportDomain, setReportDomain] = useState('');
+  const [reportData, setReportData] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportProgress, setReportProgress] = useState(0);
+
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
+  const [grokApiKey, setGrokApiKey] = useState('');
+
+  useEffect(() => {
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [darkMode]);
+
+  useEffect(() => {
+    const storedKey = localStorage.getItem('grok_api_key');
+    if (storedKey) setGrokApiKey(storedKey);
+  }, []);
+
+  const handleSaveApiKey = (key) => {
+    localStorage.setItem('grok_api_key', key);
+    setGrokApiKey(key);
+    setIsAIModalOpen(false);
+    setResults(null);
+  };
+
+  const handleConfirmDisconnect = () => {
+    localStorage.setItem('disconnect_warning_seen', 'true');
+    setGrokApiKey('');
+    setIsDisconnectModalOpen(false);
+    setResults(null);
+  };
+
+  const handleDisconnectClick = () => {
+    const hasSeenWarning = localStorage.getItem('disconnect_warning_seen');
+    if (hasSeenWarning === 'true') {
+        setGrokApiKey('');
+        setResults(null);
+    } else {
+        setIsDisconnectModalOpen(true);
+    }
+  };
+
+  const performSearch = async (targetDomain, targetType) => {
+    if (!targetDomain) return;
+    setDomain(targetDomain);
+    setRecordType(targetType);
+    setLoading(true);
+    setError(null);
+    setResults(null);
+
+    if (targetType === 'DKIM' && !targetDomain.includes(':')) {
+       setError("DKIM requires 'domain:selector' format.");
+       setLoading(false);
+       return;
+    }
+
+    setRecentLookups(prev => {
+        const exists = prev.some(l => l.domain === targetDomain && l.type === targetType);
+        if (exists) return prev;
+        return [{ domain: targetDomain, type: targetType }, ...prev].slice(0, 5);
+    });
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-grok-api-key': grokApiKey || ''
+        },
+        body: JSON.stringify({ domain: targetDomain, record_type: targetType })
+      });
+      const data = await res.json();
+      setResults(data);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to connect to backend service.");
+    }
+    setLoading(false);
+  };
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    performSearch(domain, recordType);
+  };
+
+  const renderContent = () => {
+    if (activeTool === 'Domain Report') {
+        return (
+            <DomainReport
+               domain={reportDomain}
+               setDomain={setReportDomain}
+               reportData={reportData}
+               setReportData={setReportData}
+               loading={reportLoading}
+               setLoading={setReportLoading}
+               progress={reportProgress}
+               setProgress={setReportProgress}
+            />
+        );
+    }
+    if (activeTool === 'Email Health') return <EmailHealth />;
+    if (activeTool === 'What Is My IP') return <WhatIsMyIP />;
+    if (activeTool === 'Redirection Finder') return <RedirectionFinder />;
+    if (activeTool === 'SSL Checker') return <SSLChecker />;
+    if (activeTool === 'HTTP Headers') return <HeaderAnalyzer />; // NEW ROUTE
+
+    return (
+        <>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-8 mb-8 transition-colors duration-300">
+            <form onSubmit={handleFormSubmit} className="flex flex-col gap-6">
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {recordType === 'DKIM' ? 'Domain:Selector' : 'Domain Name'}
+                  </label>
+                  <input
+                    className="w-full h-12 px-4 border-0 rounded-lg bg-slate-100 dark:bg-slate-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 transition-all outline-none font-medium"
+                    placeholder="google.com"
+                    value={domain}
+                    onChange={e => setDomain(e.target.value)}
+                  />
+                </div>
+                <div className="w-48">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Record Type</label>
+                  <select
+                    className="w-full h-12 px-3 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-700 dark:text-white outline-none focus:border-orange-500 cursor-pointer"
+                    value={recordType}
+                    onChange={e => setRecordType(e.target.value)}
+                  >
+                    {DNS_RECORD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {['DKIM', 'BIMI', 'SRV'].includes(recordType) && (
+                <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg text-xs text-slate-500 dark:text-slate-400">
+                  <span className="font-bold text-slate-700 dark:text-slate-300">Hint:</span>
+                  {recordType === 'DKIM' ? " Enter 'domain:selector' (e.g. google.com:20230601)" : " Special formatting required."}
+                </div>
+              )}
+
+              <button className="w-full h-12 bg-orange-500 text-white rounded-lg font-bold text-sm hover:bg-orange-600 flex justify-center items-center gap-2 shadow-md hover:shadow-lg transition-all transform active:scale-[0.99]">
+                {loading ? <span className="animate-pulse">Scanning...</span> : <><Search size={18} /> Lookup</>}
+              </button>
+            </form>
+
+            {recentLookups.length > 0 && (
+              <div className="mt-8 pt-6">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 font-bold"><Clock size={16} /> Recent Lookups</div>
+                  <button onClick={() => setRecentLookups([])} className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={12} /> Clear</button>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {recentLookups.map((lookup, i) => (
+                    <button
+                        key={i}
+                        onClick={() => performSearch(lookup.domain, lookup.type)}
+                        className="px-4 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full text-xs font-semibold hover:bg-orange-100 hover:text-orange-600 hover:border-orange-200 dark:hover:bg-slate-600 cursor-pointer transition-all border border-transparent"
+                    >
+                      {lookup.domain} <span className="opacity-60 ml-1">({lookup.type})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-8 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg">
+                <h4 className="text-red-700 dark:text-red-400 font-bold text-sm mb-1">Error</h4>
+                <p className="text-red-600 dark:text-red-300 text-xs">{error}</p>
+              </div>
+            )}
+          </div>
+
+          {results && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+              <div className="flex flex-col xl:flex-row gap-6 items-start relative">
+
+                {/* LEFT: TABLE */}
+                <div className="flex-1 w-full min-w-0">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden transition-colors duration-300">
+                    <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50/50 dark:bg-slate-900/50">
+                      <h3 className="font-bold text-gray-800 dark:text-white">
+                        DNS Records <span className="text-gray-400 font-normal ml-2">({results.records?.length || 0})</span>
+                      </h3>
+                      <button className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded text-xs text-gray-600 dark:text-gray-300 hover:text-orange-600 transition-colors">
+                        <Copy size={12} /> Copy
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-gray-50 dark:bg-slate-900/50 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          <tr>
+                            <th className="px-6 py-4 font-semibold w-24">Type</th>
+                            <th className="px-6 py-4 font-semibold w-24">TTL</th>
+                            <th className="px-6 py-4 font-semibold">Data</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                          {results.records && results.records.length > 0 ? (
+                            results.records.map((r, i) => (
+                              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors group">
+                                <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{r.type}</td>
+                                <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{r.ttl}</td>
+                                <td className="px-6 py-4 font-mono text-xs break-all leading-relaxed">
+                                  <div className="text-[15px] font-medium text-gray-800 dark:text-gray-100">{r.data}</div>
+                                  {r.provider && (
+                                    <div className="mt-1 text-[11px] text-gray-400 dark:text-gray-500 font-sans">
+                                      {r.provider}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr><td colSpan="3" className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">No records found.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RIGHT: AI ANALYSIS (Sticky with Internal Scroll) */}
+                {grokApiKey && (
+                  // FINAL FIX: Ensure the entire card scales perfectly to the available viewport space
+                  // height: 'calc(100vh - 120px)' forces the container to fit the viewport space
+                  <div className="w-full xl:w-96 shrink-0 xl:sticky xl:top-24 self-start" style={{ height: 'calc(100vh - 120px)' }}>
+                    <div className="bg-gradient-to-br from-slate-900 to-slate-800 dark:from-black dark:to-slate-900 rounded-xl shadow-lg p-6 text-white border border-slate-700 relative overflow-hidden h-full flex flex-col">
+
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+
+                      <div className="relative z-10 flex flex-col h-full min-h-0">
+                          {/* Sticky Header inside the card */}
+                          <div className="flex items-center gap-3 mb-5 border-b border-slate-700 pb-4 shrink-0 sticky top-0 bg-inherit z-20 backdrop-blur-md">
+                          <div className="p-2 bg-gradient-to-br from-orange-500 to-amber-600 rounded-lg shadow-lg shadow-orange-900/20">
+                              <Sparkles size={18} className="text-white" />
+                          </div>
+                          <div>
+                              <h3 className="font-bold text-lg leading-tight">Smart Analysis</h3>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Powered by Grok</p>
+                          </div>
+                          </div>
+
+                          {/* Scrollable Content Area: flex-1 ensures this div uses remaining height */}
+                          <div className="prose prose-invert max-w-none text-sm leading-relaxed overflow-y-auto pr-2 custom-scrollbar flex-1">
+                              {formatAIResponse(results.ai_analysis)}
+                          </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+    );
+  };
+
+  return (
+    <div className={`min-h-screen bg-white dark:bg-slate-900 font-sans flex transition-colors duration-300`}>
+      <AIConnectModal
+        isOpen={isAIModalOpen}
+        onClose={() => setIsAIModalOpen(false)}
+        onSave={handleSaveApiKey}
+      />
+      <DisconnectModal
+        isOpen={isDisconnectModalOpen}
+        onClose={() => setIsDisconnectModalOpen(false)}
+        onConfirm={handleConfirmDisconnect}
+      />
+
+      <Sidebar activeTool={activeTool} setActiveTool={setActiveTool} />
+
+      <div className="flex-1 ml-72 flex flex-col min-h-screen relative">
+        <header className="fixed top-0 right-0 left-72 z-50 h-16 px-8 flex justify-end items-center gap-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-gray-100 dark:border-slate-800 transition-colors duration-300">
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+          >
+            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+
+          {grokApiKey ? (
+            <button
+                onClick={handleDisconnectClick}
+                className="flex items-center gap-2 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-sm font-medium text-green-700 dark:text-green-400 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all group"
+            >
+                <CheckCircle2 size={16} className="group-hover:hidden" />
+                <Trash2 size={16} className="hidden group-hover:block" />
+                <span className="group-hover:hidden">AI Connected</span>
+                <span className="hidden group-hover:block">Disconnect</span>
+            </button>
+          ) : (
+            <button
+                onClick={() => setIsAIModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+            >
+                <Zap size={16} />
+                Connect AI
+            </button>
+          )}
+        </header>
+
+        <main className="flex-1 pt-24 p-8 max-w-[1600px] mx-auto w-full">
+            {renderContent()}
+        </main>
+
+        <footer className="py-6 text-center text-[11px] text-gray-400 dark:text-slate-600 border-t border-gray-100 dark:border-slate-800 mt-auto bg-white dark:bg-slate-900 flex flex-col gap-1">
+          <p>
+            DNS resolution powered by a primary Unbound resolver with fallbacks to <span className="text-orange-500 dark:text-orange-400 font-medium">Cloudflare</span>, <span className="text-orange-500 dark:text-orange-400 font-medium">Google</span>, and others.
+          </p>
+          <p>
+            <span className="font-semibold">Security Note:</span> Your API key is stored in your browser's local storage and is not sent to our servers.
+          </p>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+export default App;

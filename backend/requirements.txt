@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+dnspython
+pydantic
+requests
+openai
+python-dotenv
+pyopenssl
+cryptography
+python-whois
+python-multipart
