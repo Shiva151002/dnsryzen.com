@@ -33,4 +33,4 @@ jobs:
             sudo docker rm -f dnsryzen-container || true
             
             # Run the new container (Assuming this one runs on port 8000!)
-            sudo docker run -d --name dnsryzen-container --restart unless-stopped -p 8001:80 dnsryzen-image
+            sudo docker run -d --name dnsryzen-container --restart unless-stopped -p 8000:80 dnsryzen-image
