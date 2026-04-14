@@ -23,19 +23,19 @@ jobs:
             # Go to the /opt directory
             cd /opt/
             
-            # 1. If folder is missing, clone it
+            # 1. If folder is missing, clone it using the PAT
             if [ ! -d "dnsryzen.com" ]; then
               echo "Folder missing! Cloning from GitHub..."
-              sudo git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/Shiva151002/dnsryzen.com.git dnsryzen.com
+              sudo git clone https://${{ secrets.GIT_PAT }}@github.com/Shiva151002/dnsryzen.com.git dnsryzen.com
             fi
             
             # Go into the folder
             cd /opt/dnsryzen.com/
             
             # 2. Ensure we are using the token for authentication
-            sudo git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/Shiva151002/dnsryzen.com.git
+            sudo git remote set-url origin https://${{ secrets.GIT_PAT }}@github.com/Shiva151002/dnsryzen.com.git
             
-            # 3. FORCE the VM to match GitHub exactly (This fixes the missing file issue!)
+            # 3. FORCE the VM to match GitHub exactly
             sudo git fetch origin
             sudo git reset --hard origin/main
             
