@@ -23,21 +23,23 @@ jobs:
             # Go to the /opt directory
             cd /opt/
             
-            # Check if the folder exists. If not, clone it!
+            # 1. If folder is missing, clone it using the built-in GitHub Token
             if [ ! -d "dnsryzen.com" ]; then
               echo "Folder missing! Cloning from GitHub..."
-              # Note: If your repo is private, this line will need a Personal Access Token
-              sudo git clone https://github.com/Shiva151002/dnsryzen.com.git dnsryzen.com
+              sudo git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/Shiva151002/dnsryzen.com.git dnsryzen.com
             fi
             
             # Go into the folder
             cd /opt/dnsryzen.com/
             
-            # Pull the latest code (in case the folder already existed)
+            # 2. Update the git URL to use the token so 'git pull' never asks for a password
+            sudo git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/Shiva151002/dnsryzen.com.git
+            
+            # 3. Pull the latest code
             sudo git pull origin main
             
-            # Stop and remove old containers
-            sudo docker compose down
+            # 4. Stop old containers (the || true prevents errors if no containers are running)
+            sudo docker compose down || true
             
-            # Build and start the new containers
+            # 5. Build and start new containers
             sudo docker compose up -d --build
