@@ -20,7 +20,7 @@ export default defineConfig({
     },
 
     watch: {
-      usePolling: true abcdefgh
+      usePolling: true
     }
   }
 })
