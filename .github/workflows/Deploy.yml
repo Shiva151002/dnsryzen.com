@@ -20,26 +20,14 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Go to the /opt directory
-            cd /opt/
-            
-            # 1. If folder is missing, clone it using the built-in GitHub Token
-            if [ ! -d "dnsryzen.com" ]; then
-              echo "Folder missing! Cloning from GitHub..."
-              sudo git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/Shiva151002/dnsryzen.com.git dnsryzen.com
-            fi
-            
-            # Go into the folder
+            # Go to the dnsryzen folder
             cd /opt/dnsryzen.com/
             
-            # 2. Update the git URL to use the token so 'git pull' never asks for a password
-            sudo git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/Shiva151002/dnsryzen.com.git
-            
-            # 3. Pull the latest code
+            # Pull the latest code
             sudo git pull origin main
             
-            # 4. Stop old containers (the || true prevents errors if no containers are running)
-            sudo docker compose down || true
+            # Stop and remove old containers to free up ports 5173 and 8000
+            sudo docker compose down
             
-            # 5. Build and start new containers
+            # Build and start the new containers
             sudo docker compose up -d --build
