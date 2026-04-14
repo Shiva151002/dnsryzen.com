@@ -26,8 +26,8 @@ jobs:
             # Pull the latest code
             sudo git pull origin main
             
-            # Stop and remove old containers
-            sudo docker-compose down
+            # Stop and remove old containers to free up ports 5173 and 8000
+            sudo docker compose down
             
-            # Build and start the containers
-            sudo docker-compose up -d --build
+            # Build and start the new containers
+            sudo docker compose up -d --build
