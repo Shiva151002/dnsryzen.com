@@ -26,11 +26,8 @@ jobs:
             # Pull the latest code
             sudo git pull origin main
             
-            # Build the Docker image
-            sudo docker build -t dnsryzen-image .
+            # Stop and remove old containers
+            sudo docker-compose down
             
-            # Stop and remove the old container
-            sudo docker rm -f dnsryzen-container || true
-            
-            # Run the new container (Assuming this one runs on port 8000!)
-            sudo docker run -d --name dnsryzen-container --restart unless-stopped -p 8001:80 dnsryzen-image
+            # Build and start the containers
+            sudo docker-compose up -d --build
