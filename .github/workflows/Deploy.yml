@@ -20,24 +20,23 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Go to the dnsryzen folder
+            # Go to the /opt directory
+            cd /opt/
+            
+            # If the dnsryzen.com folder does NOT exist, clone it from GitHub
+            if [ ! -d "dnsryzen.com" ]; then
+              echo "Folder not found. Cloning from GitHub..."
+              sudo git clone https://github.com/Shiva151002/dnsryzen.com.git dnsryzen.com
+            fi
+            
+            # Go into the folder
             cd /opt/dnsryzen.com/
             
-            # Pull the latest code
+            # Pull the latest code just to be safe
             sudo git pull origin main
             
-            # Kill any processes using ports 8000 and 5173
-            sudo lsof -ti :8000 | xargs -r sudo kill -9
-            sudo lsof -ti :5173 | xargs -r sudo kill -9
-            
-            # Stop and remove old containers
-            sudo docker compose down -v
-            
-            # Clean up unused Docker resources
-            sudo docker system prune -f
-            
-            # Wait a moment for ports to fully release
-            sleep 2
+            # Stop any old containers that might be lingering
+            sudo docker compose down || true
             
             # Build and start the new containers
             sudo docker compose up -d --build
