@@ -20,14 +20,27 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Go to the dnsryzen folder
+            # Go to the /opt directory
+            cd /opt/
+            
+            # 1. If folder is missing, clone it
+            if [ ! -d "dnsryzen.com" ]; then
+              echo "Folder missing! Cloning from GitHub..."
+              sudo git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/Shiva151002/dnsryzen.com.git dnsryzen.com
+            fi
+            
+            # Go into the folder
             cd /opt/dnsryzen.com/
             
-            # Pull the latest code
-            sudo git pull origin main
+            # 2. Ensure we are using the token for authentication
+            sudo git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/Shiva151002/dnsryzen.com.git
             
-            # Stop and remove old containers to free up ports 5173 and 8000
-            sudo docker compose down
+            # 3. FORCE the VM to match GitHub exactly (This fixes the missing file issue!)
+            sudo git fetch origin
+            sudo git reset --hard origin/main
             
-            # Build and start the new containers
+            # 4. Stop old containers
+            sudo docker compose down || true
+            
+            # 5. Build and start new containers
             sudo docker compose up -d --build
