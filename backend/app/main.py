@@ -4,6 +4,8 @@ import socket
 import logging
 import requests
 import base64
+import ipaddress
+from urllib.parse import urlparse, urlunparse
 from datetime import datetime
 from typing import Optional, List
 
@@ -228,6 +230,41 @@ def get_cert_chain(domain):
     chain = [parse_cert(cert)]
     return chain
 
+def _is_public_hostname(hostname: str) -> bool:
+    try:
+        addrinfos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return False
+
+    for info in addrinfos:
+        ip_str = info[4][0]
+        ip_obj = ipaddress.ip_address(ip_str)
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return False
+    return True
+
+def _normalize_and_validate_external_url(raw_url: str) -> str:
+    url = raw_url.strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Only http/https URLs are allowed")
+    if not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Invalid URL")
+    if not _is_public_hostname(parsed.hostname):
+        raise HTTPException(status_code=400, detail="URL resolves to a non-public address")
+
+    return urlunparse(parsed)
+
 def parse_cert(cert):
     cn = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
     issuer = cert.issuer.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
@@ -257,13 +294,12 @@ def ssl_check(request: SSLCheckRequest):
 
 @app.post("/api/http-headers")
 def get_http_headers(request: RedirectionRequest):
-    url = request.url.strip()
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
-
     try:
+        url = _normalize_and_validate_external_url(request.url)
+
         # Use HEAD request to get headers without downloading body
-        response = requests.head(url, timeout=5, allow_redirects=True)
+        # Redirects are disabled to prevent SSRF bypass via open redirects.
+        response = requests.head(url, timeout=5, allow_redirects=False)
 
         # Analyze security headers
         headers = dict(response.headers)
