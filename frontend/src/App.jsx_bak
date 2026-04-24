@@ -7,6 +7,7 @@ import WhatIsMyIP from './components/WhatIsMyIP';
 import RedirectionFinder from './components/RedirectionFinder';
 import SSLChecker from './components/SSLChecker';
 import HeaderAnalyzer from './components/HeaderAnalyzer'; // Import NEW Component
+import ThreatIntelligence from './components/ThreatIntelligence'; // NEW Component Added Here
 import AIConnectModal from './components/AIConnectModal';
 import DisconnectModal from './components/DisconnectModal';
 import { Search, Copy, Clock, Trash2, Zap, Moon, Sun, CheckCircle2, Sparkles } from 'lucide-react';
@@ -35,7 +36,7 @@ function App() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [recentLookups, setRecentLookups] = useState([]);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
   const [error, setError] = useState(null);
 
   const [reportDomain, setReportDomain] = useState('');
@@ -144,6 +145,7 @@ function App() {
     if (activeTool === 'Redirection Finder') return <RedirectionFinder />;
     if (activeTool === 'SSL Checker') return <SSLChecker />;
     if (activeTool === 'HTTP Headers') return <HeaderAnalyzer />; // NEW ROUTE
+    if (activeTool === 'Threat Intelligence') return <ThreatIntelligence />; // Added VT Feature Route
 
     return (
         <>

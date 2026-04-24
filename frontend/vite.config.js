@@ -4,19 +4,21 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0', // allow external access
+    host: true,
     port: 5173,
     strictPort: true,
 
-    // allow your domain
-    allowedHosts: ['dnsryzen.com'],
+    allowedHosts: [
+      'dnsryzen.com',
+      'www.dnsryzen.com'
+    ],
 
-    // 🔥 important for domain + HAProxy
+    origin: 'https://dnsryzen.com',
+
     hmr: {
       host: 'dnsryzen.com',
-      protocol: 'ws', // use 'wss' if you're using HTTPS
-      port: 5173,
-      overlay: false
+      protocol: 'wss',
+      clientPort: 443
     },
 
     watch: {

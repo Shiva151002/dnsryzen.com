@@ -8,7 +8,7 @@ import RedirectionFinder from './components/RedirectionFinder';
 import SSLChecker from './components/SSLChecker';
 import HeaderAnalyzer from './components/HeaderAnalyzer'; // Import NEW Component
 import ThreatIntelligence from './components/ThreatIntelligence'; // NEW Component Added Here
-import ContactSupport from './components/ContactSupport';
+
 import AIConnectModal from './components/AIConnectModal';
 import DisconnectModal from './components/DisconnectModal';
 import { Search, Copy, Clock, Trash2, Zap, Moon, Sun, CheckCircle2, Sparkles } from 'lucide-react';
@@ -147,7 +147,6 @@ function App() {
     if (activeTool === 'SSL Checker') return <SSLChecker />;
     if (activeTool === 'HTTP Headers') return <HeaderAnalyzer />; // NEW ROUTE
     if (activeTool === 'Threat Intelligence') return <ThreatIntelligence />; // Added VT Feature Route
-    if (activeTool === 'Contact Support') return <ContactSupport />;
 
     return (
         <>

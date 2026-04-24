@@ -5,6 +5,7 @@ import logging
 import requests
 import base64
 import ipaddress
+import smtplib
 from urllib.parse import urlparse, urlunparse
 from datetime import datetime
 from typing import Optional, List
@@ -17,6 +18,8 @@ from openai import OpenAI
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from dotenv import load_dotenv # NEW: Import load_dotenv
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # NEW: Force load the .env file
 load_dotenv()
@@ -58,6 +61,12 @@ class IpRequest(BaseModel):
 class ThreatIntelRequest(BaseModel): 
     target: str
 
+class ContactSupportRequest(BaseModel):
+    name: str
+    email: str
+    message: str
+    category: Optional[str] = "General Support"
+    page: Optional[str] = "Unknown Tool"
 
 # ============================================================
 #                       ROOT
@@ -427,3 +436,170 @@ def threat_intel_analysis(analysis_id: str):
         return {"success": False, "message": f"Analysis lookup failed: {response.status_code}"}
     except Exception as e:
         return {"success": False, "message": str(e)}
+
+# ============================================================
+#               CONTACT SUPPORT EMAIL API (UPGRADED)
+# ============================================================
+
+@app.post("/api/contact-support")
+def contact_support(data: ContactSupportRequest, request: Request):
+
+    SMTP_SERVER = "email-smtp.ap-south-1.amazonaws.com"
+    SMTP_PORT = 587
+
+    SMTP_USERNAME = os.getenv("SES_SMTP_USERNAME")
+    SMTP_PASSWORD = os.getenv("SES_SMTP_PASSWORD")
+
+    FROM_EMAIL = "alerts@dnsryzen.com"
+    SUPPORT_EMAIL = "support@dnsryzen.com"
+
+    try:
+
+        # ============================================================
+        # Capture REAL USER IP (works behind proxy / docker / nginx)
+        # ============================================================
+
+        forwarded_ip = request.headers.get("x-forwarded-for")
+
+        if forwarded_ip:
+            user_ip = forwarded_ip.split(",")[0]
+        else:
+            user_ip = request.client.host
+
+
+        # ============================================================
+        # Capture browser + OS info
+        # ============================================================
+
+        user_agent = request.headers.get("user-agent", "Unknown")
+
+
+        # ============================================================
+        # Timestamp
+        # ============================================================
+
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+        # ============================================================
+        # EMAIL SUBJECT
+        # ============================================================
+
+        subject = f"[{data.category}] DNSRyzen Support Request"
+
+
+        # ============================================================
+        # EMAIL BODY (Professional structured format)
+        # ============================================================
+
+        body = f"""
+New DNSRyzen Support Request
+
+--------------------------------------------------
+
+Name: {data.name}
+Email: {data.email}
+Category: {data.category}
+Tool/Page Used: {data.page}
+
+--------------------------------------------------
+
+Message:
+
+{data.message}
+
+--------------------------------------------------
+
+User Metadata
+
+IP Address: {user_ip}
+Browser Info: {user_agent}
+Timestamp: {timestamp}
+
+--------------------------------------------------
+
+DNSRyzen Support System
+"""
+
+
+        msg = MIMEMultipart()
+
+        msg["Subject"] = subject
+        msg["From"] = FROM_EMAIL
+        msg["To"] = SUPPORT_EMAIL
+
+        msg.attach(MIMEText(body, "plain"))
+
+
+        # ============================================================
+        # SEND SUPPORT EMAIL
+        # ============================================================
+
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+
+        server.starttls()
+
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+
+        server.sendmail(FROM_EMAIL, SUPPORT_EMAIL, msg.as_string())
+
+
+        # ============================================================
+        # AUTO-REPLY EMAIL TO USER
+        # ============================================================
+
+        reply = MIMEMultipart()
+
+        reply["Subject"] = "DNSRyzen Support Request Received"
+        reply["From"] = FROM_EMAIL
+        reply["To"] = data.email
+
+        reply_body = f"""
+Hello {data.name},
+
+Thanks for contacting DNSRyzen Support.
+
+Your request has been received successfully.
+
+Support Category:
+{data.category}
+
+We usually respond within 24 hours.
+
+--------------------------------------
+
+Your message:
+
+{data.message}
+
+--------------------------------------
+
+Request Metadata
+
+Submitted at:
+{timestamp}
+
+Source Page:
+{data.page}
+
+--------------------------------------
+
+DNSRyzen Support Team
+alerts@dnsryzen.com
+"""
+
+        reply.attach(MIMEText(reply_body, "plain"))
+
+        server.sendmail(FROM_EMAIL, data.email, reply.as_string())
+
+        server.quit()
+
+        return {"success": True}
+
+
+    except Exception as e:
+
+        return {
+            "success": False,
+            "error": str(e)
+        }

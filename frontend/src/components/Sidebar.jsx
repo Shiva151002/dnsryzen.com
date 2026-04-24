@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, FileText, MapPin, Mail, Shield, Activity, FileCode, Fingerprint, Scan } from 'lucide-react';
+import { Search, FileText, MapPin, Mail, Shield, Activity, FileCode, Fingerprint, Scan, MessageCircle } from 'lucide-react';
 
 const Sidebar = ({ activeTool, setActiveTool }) => {
   const menuItems = [
@@ -14,6 +14,7 @@ const Sidebar = ({ activeTool, setActiveTool }) => {
     { icon: Shield, label: 'SSL Checker' },
     { icon: FileCode, label: 'HTTP Headers' },
     { icon: Fingerprint, label: 'Threat Intelligence' }, // NEW ITEM ADDED HERE
+	{ icon: MessageCircle, label: 'Contact Support' }, // NEW BUTTON
   ];
 
   return (

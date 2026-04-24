@@ -2,10 +2,11 @@ version: '3.8'
 services:
   backend:
     build: ./backend
+    # Use uvicorn directly with a high timeout
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 300
     ports:
       - "8000:8000"
     environment:
-      # REPLACE THIS WITH YOUR ACTUAL GROK KEY
       - GROK_API_KEY=xai-your-api-key-here
     volumes:
       - ./backend:/app
