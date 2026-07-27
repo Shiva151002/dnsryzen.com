@@ -7,20 +7,17 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
-
     allowedHosts: [
       'dnsryzen.com',
       'www.dnsryzen.com'
     ],
-
     origin: 'https://dnsryzen.com',
-
     hmr: {
       host: 'dnsryzen.com',
       protocol: 'wss',
-      clientPort: 443
+      clientPort: 443,
+      overlay: false
     },
-
     watch: {
       usePolling: true
     }

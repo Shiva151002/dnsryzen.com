@@ -20,6 +20,8 @@ from cryptography.hazmat.backends import default_backend
 from dotenv import load_dotenv # NEW: Import load_dotenv
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr, make_msgid
+from datetime import datetime, timezone
 
 # NEW: Force load the .env file
 load_dotenv()
@@ -440,125 +442,96 @@ def threat_intel_analysis(analysis_id: str):
 # ============================================================
 #               CONTACT SUPPORT EMAIL API (UPGRADED)
 # ============================================================
-
 @app.post("/api/contact-support")
 def contact_support(data: ContactSupportRequest, request: Request):
-
     SMTP_SERVER = "email-smtp.ap-south-1.amazonaws.com"
     SMTP_PORT = 587
-
     SMTP_USERNAME = os.getenv("SES_SMTP_USERNAME")
     SMTP_PASSWORD = os.getenv("SES_SMTP_PASSWORD")
-
     FROM_EMAIL = "alerts@dnsryzen.com"
     SUPPORT_EMAIL = "support@dnsryzen.com"
-
     try:
-
         # ============================================================
         # Capture REAL USER IP (works behind proxy / docker / nginx)
         # ============================================================
-
         forwarded_ip = request.headers.get("x-forwarded-for")
-
         if forwarded_ip:
-            user_ip = forwarded_ip.split(",")[0]
+            user_ip = forwarded_ip.split(",")[0].strip()
         else:
             user_ip = request.client.host
-
 
         # ============================================================
         # Capture browser + OS info
         # ============================================================
-
         user_agent = request.headers.get("user-agent", "Unknown")
 
-
         # ============================================================
-        # Timestamp
+        # Timestamp (timezone-aware UTC)
         # ============================================================
-
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
         # ============================================================
         # EMAIL SUBJECT
         # ============================================================
-
         subject = f"[{data.category}] DNSRyzen Support Request"
-
 
         # ============================================================
         # EMAIL BODY (Professional structured format)
         # ============================================================
+        body = f"""New DNSRyzen Support Request
+==================================================
 
-        body = f"""
-New DNSRyzen Support Request
-
+TICKET DETAILS
 --------------------------------------------------
+Name        : {data.name}
+Email       : {data.email}
+Category    : {data.category}
+Tool / Page : {data.page}
 
-Name: {data.name}
-Email: {data.email}
-Category: {data.category}
-Tool/Page Used: {data.page}
-
+MESSAGE
 --------------------------------------------------
-
-Message:
-
 {data.message}
 
+USER METADATA
 --------------------------------------------------
+IP Address  : {user_ip}
+Browser     : {user_agent}
+Submitted   : {timestamp}
 
-User Metadata
-
-IP Address: {user_ip}
-Browser Info: {user_agent}
-Timestamp: {timestamp}
-
---------------------------------------------------
-
+==================================================
+Reply directly to this email to respond to {data.name}.
 DNSRyzen Support System
 """
 
-
+        # ============================================================
+        # BUILD SUPPORT EMAIL (with Reply-To = user, the key fix)
+        # ============================================================
         msg = MIMEMultipart()
-
         msg["Subject"] = subject
-        msg["From"] = FROM_EMAIL
+        msg["From"] = formataddr(("DNSRyzen Support", FROM_EMAIL))
         msg["To"] = SUPPORT_EMAIL
-
+        msg["Reply-To"] = formataddr((data.name, data.email))
+        msg["Message-ID"] = make_msgid(domain="dnsryzen.com")
         msg.attach(MIMEText(body, "plain"))
 
+        # ============================================================
+        # OPEN SMTP CONNECTION
+        # ============================================================
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
 
         # ============================================================
         # SEND SUPPORT EMAIL
         # ============================================================
-
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-
-        server.starttls()
-
-        server.login(SMTP_USERNAME, SMTP_PASSWORD)
-
-        server.sendmail(FROM_EMAIL, SUPPORT_EMAIL, msg.as_string())
-
+        server.sendmail(FROM_EMAIL, [SUPPORT_EMAIL], msg.as_string())
 
         # ============================================================
-        # AUTO-REPLY EMAIL TO USER
+        # AUTO-REPLY EMAIL BODY TO USER
         # ============================================================
-
-        reply = MIMEMultipart()
-
-        reply["Subject"] = "DNSRyzen Support Request Received"
-        reply["From"] = FROM_EMAIL
-        reply["To"] = data.email
-
-        reply_body = f"""
-Hello {data.name},
+        reply_body = f"""Hello {data.name},
 
 Thanks for contacting DNSRyzen Support.
-
 Your request has been received successfully.
 
 Support Category:
@@ -567,13 +540,10 @@ Support Category:
 We usually respond within 24 hours.
 
 --------------------------------------
-
 Your message:
 
 {data.message}
-
 --------------------------------------
-
 Request Metadata
 
 Submitted at:
@@ -581,25 +551,36 @@ Submitted at:
 
 Source Page:
 {data.page}
-
 --------------------------------------
-
 DNSRyzen Support Team
 alerts@dnsryzen.com
 """
 
+        # ============================================================
+        # BUILD AUTO-REPLY EMAIL
+        # ============================================================
+        reply = MIMEMultipart()
+        reply["Subject"] = "DNSRyzen Support Request Received"
+        reply["From"] = formataddr(("DNSRyzen Support", FROM_EMAIL))
+        reply["To"] = data.email
+        reply["Reply-To"] = formataddr(("DNSRyzen Support", SUPPORT_EMAIL))
+        reply["Message-ID"] = make_msgid(domain="dnsryzen.com")
         reply.attach(MIMEText(reply_body, "plain"))
 
-        server.sendmail(FROM_EMAIL, data.email, reply.as_string())
+        # ============================================================
+        # SEND AUTO-REPLY EMAIL
+        # ============================================================
+        server.sendmail(FROM_EMAIL, [data.email], reply.as_string())
 
+        # ============================================================
+        # CLOSE CONNECTION
+        # ============================================================
         server.quit()
 
         return {"success": True}
 
-
+    # ============================================================
+    # ERROR HANDLING
+    # ============================================================
     except Exception as e:
-
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
